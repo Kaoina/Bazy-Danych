@@ -44,6 +44,7 @@ function GridBg() {
 function TabBar({active, onChange}: { active: Tab; onChange: (t: Tab) => void }) {
     return (
         <div className="tabs">
+            {/* Generowanie przycisków zakładek (Logowanie / Rejestracja) na podstawie typu Tab */}
             {(['login', 'register'] as Tab[]).map((tab) => (
                 <button
                     key={tab}
@@ -61,6 +62,7 @@ function TabBar({active, onChange}: { active: Tab; onChange: (t: Tab) => void })
 }
 
 export function AuthPage() {
+    // Stan przechowujący aktualnie wybraną zakładkę (logowanie lub rejestracja)
     const [tab, setTab] = useState<Tab>('login')
 
     return (
@@ -68,10 +70,17 @@ export function AuthPage() {
             <GridBg/>
             <main className="auth-card">
                 <Logo/>
+                
+                {/* Komponent z zakładkami pozwalający na przełączanie między logowaniem a rejestracją */}
                 <TabBar active={tab} onChange={setTab}/>
+                
+                {/* Wyświetlanie odpowiedniego formularza (logowania lub rejestracji) w zależności od wybranej zakładki.
+                    Użycie atrybutu key={tab} wymusza ponowne renderowanie elementu przy zmianie zakładki, co umożliwia np. animację. */}
                 <div className="animate-fade-in" key={tab}>
                     {tab === 'login' ? <LoginForm/> : <RegisterForm/>}
                 </div>
+                
+                {/* Tekst zachęcający do przejścia na drugą zakładkę w zależności od obecnego stanu */}
                 <p className="switch-text">
                     {tab === 'login' ? 'Nie masz jeszcze konta?' : 'Masz już konto?'}{' '}
                     <button type="button" className="btn-switch"

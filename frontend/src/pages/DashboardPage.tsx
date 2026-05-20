@@ -6,35 +6,45 @@ type Tab = 'expenses' | 'balances';
 
 export function DashboardPage() {
 
+    // Stan przechowujący grupy użytkownika oraz obsługę ładowania/błędów z API
     const [groups, setGroups] = useState<Group[]>([]);
     const [groupsLoading, setGroupsLoading] = useState(true);
     const [groupsError, setGroupsError] = useState<string | null>(null);
 
+    // Stan aktualnie otwartej (wybranej) grupy oraz jej aktywnej zakładki (wydatki lub rozliczenia)
     const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
     const [activeTab, setActiveTab] = useState<Tab>('expenses');
 
+    // Stany przechowujące wydatki w wybranej grupie
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [expensesLoading, setExpensesLoading] = useState(false);
 
+    // Stany przechowujące bilans (podsumowanie rozliczeń) w wybranej grupie
     const [balances, setBalances] = useState<BalanceSummary | null>(null);
     const [balancesLoading, setBalancesLoading] = useState(false);
 
+    // Lokalne stany formularzy dla nowej grupy, dołączania do grupy oraz dodawania wydatków
     const [newGroupName, setNewGroupName] = useState('');
     const [newGroupDesc, setNewGroupDesc] = useState('');
     const [joinId, setJoinId] = useState('');
     const [expenseAmount, setExpenseAmount] = useState('');
     const [expenseDesc, setExpenseDesc] = useState('');
+    
+    // Globalne komunikaty dla błędów i sukcesów formularzy na dashboardzie
     const [formError, setFormError] = useState<string | null>(null);
     const [formSuccess, setFormSuccess] = useState<string | null>(null);
 
+    // Pobierz wszystkie grupy użytkownika po wejściu na Dashboard
     useEffect(() => { loadGroups(); }, []);
 
+    // Ładuj wydatki lub rozliczenia ilekroć użytkownik wybierze inną grupę bądź zakładkę
     useEffect(() => {
         if (!selectedGroup) { setExpenses([]); setBalances(null); return; }
         if (activeTab === 'expenses') loadExpenses(selectedGroup.id);
         if (activeTab === 'balances') loadBalances(selectedGroup.id);
     }, [selectedGroup, activeTab]);
 
+    // Funkcja do pobierania grup z serwera
     async function loadGroups() {
         setGroupsLoading(true);
         const result = await getMyGroups();
@@ -43,6 +53,7 @@ export function DashboardPage() {
         setGroupsLoading(false);
     }
 
+    // Funkcja do pobierania wydatków dla konkretnej grupy
     async function loadExpenses(groupId: string) {
         setExpensesLoading(true);
         const result = await getExpenses(groupId);
@@ -50,6 +61,7 @@ export function DashboardPage() {
         setExpensesLoading(false);
     }
 
+    // Funkcja pobierająca zoptymalizowane informacje o rozliczeniach między użytkownikami grupy
     async function loadBalances(groupId: string) {
         setBalancesLoading(true);
         const result = await getBalances(groupId);
@@ -57,6 +69,7 @@ export function DashboardPage() {
         setBalancesLoading(false);
     }
 
+    // Wywołanie otwarcia wybranej grupy w panelu szczegółowym lub jej zamknięcia
     function handleGroupClick(group: Group) {
         if (selectedGroup?.id === group.id) { setSelectedGroup(null); return; }
         setSelectedGroup(group);
@@ -65,6 +78,7 @@ export function DashboardPage() {
         setFormSuccess(null);
     }
 
+    // Tworzenie nowej grupy wydatków
     async function handleCreateGroup(e: React.FormEvent) {
         e.preventDefault();
         setFormError(null); setFormSuccess(null);
@@ -76,6 +90,7 @@ export function DashboardPage() {
         } else { setFormError(result.message); }
     }
 
+    // Dołączanie do grupy za pomocą podanego 5-znakowego kodu
     async function handleJoinGroup(e: React.FormEvent) {
         e.preventDefault();
         setFormError(null); setFormSuccess(null);
@@ -86,6 +101,7 @@ export function DashboardPage() {
         else { setFormError(result.message); }
     }
 
+    // Funkcja dodająca nowy wydatek w obrębie bieżącej grupy
     async function handleAddExpense(e: React.FormEvent) {
         e.preventDefault();
         if (!selectedGroup) return;
@@ -102,6 +118,7 @@ export function DashboardPage() {
         } else { setFormError(result.message); }
     }
 
+    // Pomocnicza funkcja formatująca daty np. "01.01.2023, 14:00"
     function formatDate(iso: string) {
         return new Date(iso).toLocaleDateString('pl-PL', {
             day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'

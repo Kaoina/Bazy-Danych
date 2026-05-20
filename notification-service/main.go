@@ -11,6 +11,8 @@ import (
 	"gopkg.in/gomail.v2"
 )
 
+// ExpenseCreatedEvent przechowuje dane o zdarzeniu utworzenia nowego wydatku.
+// Struktura ta jest używana do deserializacji wiadomości z Kafki.
 type ExpenseCreatedEvent struct {
 	GroupID         string   `json:"group_id"`
 	ExpenseID       string   `json:"expense_id"`
@@ -29,12 +31,15 @@ func getEnv(key, fallback string) string {
 }
 
 func sendEmails(event ExpenseCreatedEvent) error {
+	// Pobranie konfiguracji serwera SMTP ze zmiennych środowiskowych lub użycie wartości domyślnych.
 	host := getEnv("SMTP_HOST", "mailpit")
 	port, _ := strconv.Atoi(getEnv("SMTP_PORT", "1025"))
 
+	// Utworzenie dialera do połączenia z serwerem SMTP.
 	d := gomail.NewDialer(host, port, "", "")
-	d.SSL = false
+	d.SSL = false // Wyłączenie SSL, przydatne w środowisku deweloperskim (np. z Mailpit).
 
+	// Pętla przez wszystkich odbiorców i wysyłka indywidualnych maili.
 	for _, email := range event.RecipientEmails {
 		m := gomail.NewMessage()
 		m.SetHeader("From", getEnv("SMTP_FROM", "noreply@splitapp.com"))
@@ -47,6 +52,7 @@ func sendEmails(event ExpenseCreatedEvent) error {
 			event.Amount,
 		))
 
+		// Próba wysłania maila i logowanie wyniku.
 		if err := d.DialAndSend(m); err != nil {
 			log.Printf("Błąd wysyłki do %s: %v", email, err)
 		} else {

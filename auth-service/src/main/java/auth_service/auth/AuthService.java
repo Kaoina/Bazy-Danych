@@ -36,16 +36,23 @@ class AuthService {
     public AuthResponse login(LoginRequest request) {
         Authentication authentication;
         try {
+            // Próba uwierzytelnienia użytkownika za pomocą emaila i hasła
             authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.email(), request.password())
             );
         } catch (AuthenticationException e) {
+            // Rzucenie własnego wyjątku, jeśli dane logowania są niepoprawne
             throw new LoginFailedException();
         }
 
+        // Pobranie szczegółów zalogowanego użytkownika
         CustomUserDetails customUserDetails = (CustomUserDetails) authentication.getPrincipal();
         UUID userId = customUserDetails.user().getId();
+        
+        // Wygenerowanie tokena JWT dla danego identyfikatora użytkownika
         String jwtToken = jwtUtils.generateToken(userId);
+        
+        // Zwrócenie wygenerowanego tokena w obiekcie odpowiedzi
         return new AuthResponse(jwtToken);
     }
 

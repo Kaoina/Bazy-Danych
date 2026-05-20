@@ -31,6 +31,7 @@ const CheckLockIcon = () => (
 const STRENGTH_LABEL = ['', 'Słabe', 'Przeciętne', 'Dobre', 'Silne'] as const
 const STRENGTH_COLOR = ['', 'var(--color-error)', 'var(--color-warning)', 'var(--color-info)', 'var(--color-success)'] as const
 
+// Funkcja oceniająca siłę hasła na podstawie jego długości i różnorodności użytych znaków
 function calcStrength(pw: string): number {
     if (!pw) return 0
     let s = 0
@@ -41,6 +42,7 @@ function calcStrength(pw: string): number {
     return s
 }
 
+// Komponent wyświetlający wskaźnik wizualny siły wprowadzanego hasła
 function PasswordStrengthBar({password}: { password: string }) {
     if (!password) return null
     const score = calcStrength(password)
@@ -61,20 +63,23 @@ function PasswordStrengthBar({password}: { password: string }) {
 }
 
 export function RegisterForm() {
+    // Hook zarządzający logiką rejestracji, błędami i statusem ładowania
     const {register, loading, error, clearError} = useAuth()
-    const [name, setName] = useState('')          // NOWE
+    
+    // Lokalne stany przechowujące dane wejściowe z pól formularza
+    const [name, setName] = useState('')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
 
+    // Przekazanie wpisanych danych do funkcji z hooka w celu przetworzenia rejestracji
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
-        register({name, email, password, confirmPassword})  // dodajemy name
+        register({name, email, password, confirmPassword})
     }
 
     return (
         <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
-            {/* NOWE pole — imię */}
             <TextInput
                 label="Imię"
                 type="text"
@@ -89,18 +94,24 @@ export function RegisterForm() {
                        onChange={(e) => setEmail(e.target.value)}
                        placeholder="jan@kowalski.pl" iconLeft={<EmailIcon/>}
                        autoComplete="email" required/>
+                       
             <div className="flex flex-col gap-2">
                 <TextInput label="Hasło" value={password}
                            onChange={(e) => setPassword(e.target.value)}
                            placeholder="••••••••" iconLeft={<LockIcon/>}
                            revealable autoComplete="new-password" required/>
+                {/* Wskaźnik siły dla aktualnie wpisywanego hasła */}
                 <PasswordStrengthBar password={password}/>
             </div>
+            
             <TextInput label="Potwierdź hasło" value={confirmPassword}
                        onChange={(e) => setConfirmPassword(e.target.value)}
                        placeholder="••••••••" iconLeft={<CheckLockIcon/>}
                        revealable autoComplete="new-password" required/>
+                       
+            {/* Opcjonalny komunikat błędu związany z problemami przy rejestracji */}
             <ErrorBanner message={error} onDismiss={clearError}/>
+
             <Button type="submit" fullWidth loading={loading}>
                 Utwórz konto
             </Button>

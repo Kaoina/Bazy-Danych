@@ -16,9 +16,11 @@ public class GatewayConfig {
     @Bean
     public RouteLocator myRoutes(RouteLocatorBuilder builder, JwtFilter jwtFilter) {
         return builder.routes()
+                // Trasa dla serwisu autoryzacji
                 .route("auth-service", r -> r.path("/api/auth/**")
                         .uri("http://auth-service:8081"))
 
+                // Trasa dla serwisu wydatków, zabezpieczona filtrem JWT
                 .route("expense-service", r -> r.path("/api/expenses/**")
                         .filters(f -> f.filter(jwtFilter.apply(new JwtFilter.Config())))
                         .uri("http://expense-service:8082"))
@@ -30,9 +32,13 @@ public class GatewayConfig {
     public CorsWebFilter corsWebFilter() {
         CorsConfiguration config = new CorsConfiguration();
 
+        // Dozwolone źródła zapytań (frontend)
         config.setAllowedOrigins(Arrays.asList("http://localhost:5173", "http://localhost:3000"));
+        // Dozwolone metody HTTP
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        // Dozwolone wszystkie nagłówki
         config.setAllowedHeaders(Arrays.asList("*"));
+        // Zezwolenie na przesyłanie poświadczeń (np. ciasteczek, tokenów)
         config.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

@@ -17,13 +17,17 @@ const LockIcon = () => (
 )
 
 export function LoginForm() {
+    // Hook używany do zarządzania logowaniem i wyświetlaniem błędów/stanu ładowania
     const {login, loading, error, clearError} = useAuth()
+    
+    // Lokalne stany dla pól formularza
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
 
+    // Obsługa wysłania formularza
     const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
-        login({email, password})
+        e.preventDefault() // Zapobiega domyślnemu odświeżeniu strony
+        login({email, password}) // Wywołanie funkcji logowania przekazanej z hooka
     }
 
     return (
@@ -32,11 +36,15 @@ export function LoginForm() {
                        onChange={(e) => setEmail(e.target.value)}
                        placeholder="jan@kowalski.pl" iconLeft={<EmailIcon/>}
                        autoComplete="email" required/>
+                       
             <TextInput label="Hasło" value={password}
                        onChange={(e) => setPassword(e.target.value)}
                        placeholder="••••••••" iconLeft={<LockIcon/>}
                        revealable autoComplete="current-password" required/>
+                       
+            {/* Wyświetlanie baneru błędu w przypadku nieudanego logowania */}
             <ErrorBanner message={error} onDismiss={clearError}/>
+            
             <Button type="submit" fullWidth loading={loading}>Zaloguj się</Button>
         </form>
     )
