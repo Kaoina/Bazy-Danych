@@ -1,4 +1,4 @@
-![Diagram](diagram3.svg)
+![Diagram](expenses-app-schema.svg)
 
 Aby uruchomić aplikację, wystarczy wykonać poniższą komendę:
 
@@ -7,3 +7,7 @@ Aby uruchomić aplikację, wystarczy wykonać poniższą komendę:
 Następnie otwórz przeglądarkę i przejdź pod adres:
 
 http://localhost:3000
+
+Skrzynka mailowa jest dostępna pod adresem:
+
+http://localhost:8025
