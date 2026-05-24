@@ -26,30 +26,42 @@ def calculate_debts(
     Zamienia słownik sald na listę transakcji (kto, komu, ile).
     Minimalizuje liczbę przelewów.
     Zwraca listę krotek: (dłużnik, wierzyciel, kwota)
+
+    Przykład:
+        balances = {'A': 50.0, 'B': -10.0, 'C': -40.0}
+        => [('C', 'A', 40.0), ('B', 'A', 10.0)]
     """
-    # Rozdziel na tych co mają dostać (saldo > 0) i tych co muszą zapłacić (saldo < 0)
-    # Zaokrąglamy do 2 miejsc żeby uniknąć błędów zmiennoprzecinkowych (np. 0.10000000001)
+    # Rozdzielamy użytkowników na wierzycieli i dłużników.
+    # Wierzyciele mają dodatnie saldo — ktoś im jest winny.
+    # Dłużnicy mają ujemne saldo — oni muszą zapłacić innym.
+    # Przekształcamy ujemne salda na pozytywne liczby, aby łatwiej było je porównywać.
+    # Zaokrąglamy do 2 miejsc, żeby uniknąć problemów z floating point (np. 0.10000000001).
     creditors = {u: round(b, 2) for u, b in balances.items() if b > 0.01}
     debtors   = {u: round(-b, 2) for u, b in balances.items() if b < -0.01}
 
     transactions = []
 
-    # Greedy algorithm — dopasowujemy największego dłużnika z największym wierzycielem
+    # Greedy algorithm — łączymy największe salda najpierw, aby zmniejszyć liczbę przelewów.
+    # W każdej iteracji rozliczamy jedną transakcję między najwyższym dłużnikiem i najwyższym wierzycielem.
     while creditors and debtors:
-        # Wybierz osobę która ma dostać najwięcej i osobę która winna jest najwięcej
+        # Wybieramy osobę, która powinna otrzymać najwięcej (wierzyciel)
+        # oraz osobę, która musi zapłacić najwięcej (dłużnik).
         creditor = max(creditors, key=creditors.get)
         debtor   = max(debtors,   key=debtors.get)
 
+        # Kwota to minimum między tym, co wierzyciel ma dostać, a tym, co dłużnik musi spłacić.
         amount = min(creditors[creditor], debtors[debtor])
         amount = round(amount, 2)
 
+        # Dodajemy pojedynczą transakcję: dłużnik płaci wierzycielowi.
         transactions.append((debtor, creditor, amount))
 
-        # Zmniejsz salda o rozliczoną kwotę
+        # Aktualizujemy salda po rozliczeniu tej transakcji.
         creditors[creditor] = round(creditors[creditor] - amount, 2)
         debtors[debtor]     = round(debtors[debtor] - amount, 2)
 
-        # Usuń osoby z saldem 0 (już rozliczone)
+        # Usuń osoby, które już się całkowicie rozliczyły.
+        # Małe wartości poniżej progu 0.01 traktujemy jako zero, bo floaty mogą być nieprecyzyjne.
         if creditors[creditor] < 0.01:
             del creditors[creditor]
         if debtors[debtor] < 0.01:
