@@ -1,6 +1,6 @@
 ![Diagram](expenses-app-schema.svg)
 
-Aplikacja rozliczeń grupowych wydatków — projekt zgodny z wymaganiami przedmiotu **Bazy danych**.
+Aplikacja rozliczeń grupowych wydatków
 
 ## Uruchomienie
 
@@ -26,7 +26,7 @@ Schematy: `auth-service/src/main/resources/schema.sql`, `expense-service/app/sch
 
 Relacje: klucze obce (`group_members` → `groups`, `expenses` → `groups`, `expense_splits` → `expenses`), ograniczenia UNIQUE i CHECK.
 
-### Brak ORM — SQL w kodzie
+### Brak ORM - SQL w kodzie
 
 - **auth-service** (Java/Spring): `UserDao` z osadzonymi zapytaniami SQL przez `JdbcTemplate` (bez JPA/Hibernate).
 - **expense-service** (Python/FastAPI): `psycopg2` + stałe `SQL_*` w routerach (bez SQLAlchemy).
