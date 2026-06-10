@@ -13,7 +13,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserService {
 
-    private final UserRepository userRepository;
+    private final UserDao userDao;
     private final PasswordEncoder passwordEncoder;
 
     public User createUser(RegistrationRequest request) {
@@ -21,24 +21,24 @@ public class UserService {
         return saveNewUser(request);
     }
 
-    // NOWE — szukamy usera po ID (expense-service będzie tego używał)
     public Optional<User> findById(UUID id) {
-        return userRepository.findById(id);
+        return userDao.findById(id);
     }
 
     private void checkIfUserExists(String email) {
-        if (userRepository.existsByEmail(email)) {
+        if (userDao.existsByEmail(email)) {
             throw new EmailAlreadyExistsException();
         }
     }
 
     private User saveNewUser(RegistrationRequest request) {
         User user = User.builder()
+                .id(UUID.randomUUID())
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password()))
-                .name(request.name())  // NOWE — zapisujemy imię
+                .name(request.name())
                 .build();
 
-        return userRepository.save(user);
+        return userDao.insert(user);
     }
 }

@@ -1,6 +1,6 @@
 import { AxiosError } from 'axios';
 import { apiClient } from './client';
-import type { Group, Expense, BalanceSummary, CreateGroupRequest, CreateExpenseRequest } from '../types/expense';
+import type { Group, MemberInfo, Expense, BalanceSummary, CreateGroupRequest, CreateExpenseRequest } from '../types/expense';
 import type { ApiResult } from '../types/auth';
 
 function extractMessage(error: unknown): { message: string; status?: number } {
@@ -49,6 +49,13 @@ export async function addExpense(groupId: string, payload: CreateExpenseRequest)
 export async function getBalances(groupId: string): Promise<ApiResult<BalanceSummary>> {
     try {
         const { data } = await apiClient.get<BalanceSummary>(`/api/expenses/groups/${groupId}/balances`);
+        return { ok: true, data };
+    } catch (err) { return { ok: false, ...extractMessage(err) }; }
+}
+
+export async function getGroupMembers(groupId: string): Promise<ApiResult<MemberInfo[]>> {
+    try {
+        const { data } = await apiClient.get<MemberInfo[]>(`/api/expenses/groups/${groupId}/members`);
         return { ok: true, data };
     } catch (err) { return { ok: false, ...extractMessage(err) }; }
 }

@@ -2,9 +2,14 @@ export interface Group {
     id: string;
     name: string;
     description: string | null;
-    owner_id: string;
+    owner_name: string;
     created_at: string;
     member_count: number;
+}
+
+export interface MemberInfo {
+    name: string;
+    is_current_user: boolean;
 }
 
 export interface SplitDetail {
@@ -14,7 +19,6 @@ export interface SplitDetail {
 
 export interface Expense {
     id: number;
-    group_id: string;
     paid_by: string;
     amount: number;
     description: string;
@@ -23,8 +27,8 @@ export interface Expense {
 }
 
 export interface DebtEntry {
-    from_user: string;  // kto jest winny
-    to_user: string;    // komu jest winny
+    from_user: string;
+    to_user: string;
     amount: number;
 }
 

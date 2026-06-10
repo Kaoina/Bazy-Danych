@@ -1,60 +1,79 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
-from sqlalchemy.orm import Session
+
 from app.database import get_db
-from app import models, schemas
+from app import schemas
 from app.users import get_user_name, get_user_emails
 from app.settlement import compute_group_balances, calculate_debts
 from app.kafka_producer import publish_expense_created
+from app.routers.groups import _require_membership
 
 router = APIRouter(prefix="/api/expenses/groups", tags=["expenses"])
+
+SQL_SELECT_MEMBERS = """
+    SELECT user_id FROM group_members WHERE group_id = %s
+"""
+
+SQL_INSERT_EXPENSE = """
+    INSERT INTO expenses (group_id, paid_by, amount, description, created_at)
+    VALUES (%s, %s, %s, %s, NOW() AT TIME ZONE 'utc')
+    RETURNING id, group_id, paid_by, amount, description, created_at
+"""
+
+SQL_INSERT_SPLIT = """
+    INSERT INTO expense_splits (expense_id, user_id, amount)
+    VALUES (%s, %s, %s)
+"""
+
+SQL_SELECT_EXPENSES = """
+    SELECT id, group_id, paid_by, amount, description, created_at
+    FROM expenses
+    WHERE group_id = %s
+    ORDER BY created_at DESC
+"""
+
+SQL_SELECT_EXPENSES_FOR_BALANCE = """
+    SELECT id, group_id, paid_by, amount, description, created_at
+    FROM expenses
+    WHERE group_id = %s
+"""
+
+SQL_SELECT_SPLITS_FOR_EXPENSES = """
+    SELECT expense_id, user_id, amount
+    FROM expense_splits
+    WHERE expense_id = ANY(%s)
+    ORDER BY expense_id, id
+"""
 
 
 def get_current_user(x_user_id: str = Header(...)):
     return x_user_id
 
 
-def check_membership(group_id: str, user_id: str, db: Session):
-    group = db.query(models.Group).filter(models.Group.id == group_id).first()
-    if not group:
-        raise HTTPException(status_code=404, detail="Grupa nie istnieje")
-    membership = db.query(models.GroupMember).filter(
-        models.GroupMember.group_id == group_id,
-        models.GroupMember.user_id == user_id
-    ).first()
-    if not membership:
-        raise HTTPException(status_code=403, detail="Nie jesteś członkiem tej grupy")
-    return group
-
-
 @router.post("/{group_id}/expenses", response_model=schemas.ExpenseResponse, status_code=201)
 async def add_expense(
     group_id: str,
     expense_data: schemas.ExpenseCreate,
-    db: Session = Depends(get_db),
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_current_user),
 ):
-    check_membership(group_id, user_id, db)
+    _require_membership(group_id, user_id)
 
-    # Pobierz wszystkich członków grupy — wydatek dzielony między WSZYSTKICH
-    members = db.query(models.GroupMember).filter(
-        models.GroupMember.group_id == group_id
-    ).all()
-    member_ids = [m.user_id for m in members]
+    with get_db() as (conn, cur):
+        cur.execute(SQL_SELECT_MEMBERS, (group_id,))
+        member_rows = cur.fetchall()
+        member_ids = [r["user_id"] for r in member_rows]
 
-    # Podziel kwotę po równo, zaokrąglij do 2 miejsc
-    share = round(expense_data.amount / len(member_ids), 2)
+        share = round(expense_data.amount / len(member_ids), 2)
 
-    # Zapisz wydatek
-    new_expense = models.Expense(
-        group_id=group_id,
-        paid_by=user_id,
-        amount=expense_data.amount,
-        description=expense_data.description
-    )
-    db.add(new_expense)
-    db.flush()  # potrzebujemy new_expense.id dla splitów
+        cur.execute(
+            SQL_INSERT_EXPENSE,
+            (group_id, user_id, expense_data.amount, expense_data.description),
+        )
+        expense = cur.fetchone()
 
-    paid_by_name = await get_user_name(new_expense.paid_by)
+        for member_id in member_ids:
+            cur.execute(SQL_INSERT_SPLIT, (expense["id"], member_id, share))
+
+    paid_by_name = await get_user_name(expense["paid_by"])
 
     recipient_ids = [m for m in member_ids if m != user_id]
     recipient_emails = await get_user_emails(recipient_ids)
@@ -62,84 +81,80 @@ async def add_expense(
     if recipient_emails:
         publish_expense_created(
             group_id=str(group_id),
-            expense_id=str(new_expense.id),
+            expense_id=str(expense["id"]),
             paid_by_name=paid_by_name,
-            amount=new_expense.amount,
-            description=new_expense.description,
-            created_at=new_expense.created_at,
-            recipient_emails=recipient_emails
+            amount=expense["amount"],
+            description=expense["description"],
+            created_at=expense["created_at"],
+            recipient_emails=recipient_emails,
         )
-
-    # Zapisz podział — jeden wiersz na osobę
-    for member_id in member_ids:
-        split = models.ExpenseSplit(
-            expense_id=new_expense.id,
-            user_id=member_id,
-            amount=share
-        )
-        db.add(split)
-
-    db.commit()
-    db.refresh(new_expense)
-
-    # Pobierz imię płacącego i zwróć odpowiedź z podziałem
-    paid_by_name = await get_user_name(new_expense.paid_by)
 
     split_details = []
-    for split in new_expense.splits:
-        name = await get_user_name(split.user_id)
-        split_details.append(schemas.SplitDetail(user_name=name, amount=split.amount))
+    for member_id in member_ids:
+        name = await get_user_name(member_id)
+        split_details.append(schemas.SplitDetail(user_name=name, amount=share))
 
     return schemas.ExpenseResponse(
-        id=new_expense.id,
-        group_id=new_expense.group_id,
+        id=expense["id"],
         paid_by=paid_by_name,
-        amount=new_expense.amount,
-        description=new_expense.description,
-        created_at=new_expense.created_at,
-        splits=split_details
+        amount=expense["amount"],
+        description=expense["description"],
+        created_at=expense["created_at"],
+        splits=split_details,
     )
 
 
 @router.get("/{group_id}/expenses", response_model=list[schemas.ExpenseResponse])
 async def get_expenses(
     group_id: str,
-    db: Session = Depends(get_db),
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_current_user),
 ):
-    check_membership(group_id, user_id, db)
+    _require_membership(group_id, user_id)
 
-    expenses = db.query(models.Expense).filter(
-        models.Expense.group_id == group_id
-    ).order_by(models.Expense.created_at.desc()).all()
+    with get_db() as (conn, cur):
+        cur.execute(SQL_SELECT_EXPENSES, (group_id,))
+        expense_rows = cur.fetchall()
 
-    # Zbierz wszystkie unikalne ID userów (płacący + osoby z podziałów)
+        if not expense_rows:
+            return []
+
+        expense_ids = [e["id"] for e in expense_rows]
+        cur.execute(SQL_SELECT_SPLITS_FOR_EXPENSES, (expense_ids,))
+        split_rows = cur.fetchall()
+
+    splits_by_expense: dict[int, list] = {}
+    for s in split_rows:
+        splits_by_expense.setdefault(s["expense_id"], []).append(s)
+
     all_user_ids = set()
-    for e in expenses:
-        all_user_ids.add(e.paid_by)
-        for s in e.splits:
-            all_user_ids.add(s.user_id)
+    for e in expense_rows:
+        all_user_ids.add(e["paid_by"])
+        for s in splits_by_expense.get(e["id"], []):
+            all_user_ids.add(s["user_id"])
 
-    # Pobierz imiona wszystkich naraz
     names: dict[str, str] = {}
     for uid in all_user_ids:
         names[uid] = await get_user_name(uid)
 
     result = []
-    for expense in expenses:
+    for expense in expense_rows:
         split_details = [
-            schemas.SplitDetail(user_name=names.get(s.user_id, s.user_id), amount=s.amount)
-            for s in expense.splits
+            schemas.SplitDetail(
+                user_name=names.get(s["user_id"], s["user_id"]),
+                amount=s["amount"],
+            )
+            for s in splits_by_expense.get(expense["id"], [])
         ]
-        result.append(schemas.ExpenseResponse(
-            id=expense.id,
-            group_id=expense.group_id,
-            paid_by=names.get(expense.paid_by, expense.paid_by),
-            amount=expense.amount,
-            description=expense.description,
-            created_at=expense.created_at,
-            splits=split_details
-        ))
+        result.append(
+            schemas.ExpenseResponse(
+                id=expense["id"],
+                paid_by=names.get(expense["paid_by"], expense["paid_by"]),
+                amount=expense["amount"],
+                description=expense["description"],
+                created_at=expense["created_at"],
+                splits=split_details,
+            )
+        )
 
     return result
 
@@ -147,48 +162,54 @@ async def get_expenses(
 @router.get("/{group_id}/balances", response_model=schemas.BalanceSummary)
 async def get_balances(
     group_id: str,
-    db: Session = Depends(get_db),
-    user_id: str = Depends(get_current_user)
+    user_id: str = Depends(get_current_user),
 ):
-    """
-    Zwraca kto komu ile winien w tej grupie.
-    Używa algorytmu minimalizacji długów z settlement.py
-    """
-    check_membership(group_id, user_id, db)
+    _require_membership(group_id, user_id)
 
-    # Pobierz wszystkich członków
-    members = db.query(models.GroupMember).filter(
-        models.GroupMember.group_id == group_id
-    ).all()
-    member_ids = [m.user_id for m in members]
+    with get_db() as (conn, cur):
+        cur.execute(SQL_SELECT_MEMBERS, (group_id,))
+        member_ids = [r["user_id"] for r in cur.fetchall()]
 
-    # Pobierz wydatki z podziałami
-    expenses = db.query(models.Expense).filter(
-        models.Expense.group_id == group_id
-    ).all()
+        cur.execute(SQL_SELECT_EXPENSES_FOR_BALANCE, (group_id,))
+        expense_rows = cur.fetchall()
 
-    # Oblicz salda
-    balances = compute_group_balances(expenses, member_ids)
+        if expense_rows:
+            expense_ids = [e["id"] for e in expense_rows]
+            cur.execute(SQL_SELECT_SPLITS_FOR_EXPENSES, (expense_ids,))
+            split_rows = cur.fetchall()
+        else:
+            split_rows = []
 
-    # Zamień salda na listę konkretnych długów
+    splits_by_expense: dict[int, list] = {}
+    for s in split_rows:
+        splits_by_expense.setdefault(s["expense_id"], []).append(
+            {"user_id": s["user_id"], "amount": s["amount"]}
+        )
+
+    expenses_for_settlement = []
+    for e in expense_rows:
+        expenses_for_settlement.append(
+            {
+                "paid_by": e["paid_by"],
+                "amount": e["amount"],
+                "splits": splits_by_expense.get(e["id"], []),
+            }
+        )
+
+    balances = compute_group_balances(expenses_for_settlement, member_ids)
     transactions = calculate_debts(balances)
 
-    # Pobierz imiona wszystkich
     names: dict[str, str] = {}
     for uid in member_ids:
         names[uid] = await get_user_name(uid)
 
-    # Zbuduj odpowiedź
     debts = [
         schemas.DebtEntry(
             from_user=names.get(debtor, debtor),
             to_user=names.get(creditor, creditor),
-            amount=amount
+            amount=amount,
         )
         for debtor, creditor, amount in transactions
     ]
 
-    return schemas.BalanceSummary(
-        debts=debts,
-        settled=len(debts) == 0
-    )
+    return schemas.BalanceSummary(debts=debts, settled=len(debts) == 0)

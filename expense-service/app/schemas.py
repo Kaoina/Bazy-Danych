@@ -20,13 +20,18 @@ class GroupResponse(BaseModel):
     id: str
     name: str
     description: str | None
-    owner_id: str
+    owner_name: str
     created_at: datetime
-    model_config = {"from_attributes": True}
 
 
 class GroupWithMembers(GroupResponse):
     member_count: int
+
+
+class MemberInfo(BaseModel):
+    """Członek grupy — dane zrozumiałe dla operatora (bez UUID)."""
+    name: str
+    is_current_user: bool = False
 
 
 # --- WYDATKI ---
@@ -51,39 +56,30 @@ class ExpenseCreate(BaseModel):
 
 
 class SplitDetail(BaseModel):
-    """Jeden wiersz podziału — czyja część i ile"""
     user_name: str
     amount: float
 
 
 class ExpenseResponse(BaseModel):
     id: int
-    group_id: str
-    paid_by: str          # imię płacącego
+    paid_by: str
     amount: float
     description: str
     created_at: datetime
-    splits: list[SplitDetail] = []   # lista kto ile jest winny za ten wydatek
-
-    model_config = {"from_attributes": True}
+    splits: list[SplitDetail] = []
 
 
 # --- ROZLICZENIA ---
 
 class DebtEntry(BaseModel):
-    """
-    Jeden dług: 'Anna winna Kasi 35.50 zł'
-    from_user = Anna, to_user = Kasia, amount = 35.50
-    """
-    from_user: str    # kto jest winny (imię)
-    to_user: str      # komu jest winny (imię)
-    amount: float     # ile
+    from_user: str
+    to_user: str
+    amount: float
 
 
 class BalanceSummary(BaseModel):
-    """Pełne podsumowanie rozliczeń grupy"""
-    debts: list[DebtEntry]         # lista długów do spłaty
-    settled: bool                   # True jeśli wszyscy są kwita
+    debts: list[DebtEntry]
+    settled: bool
 
 
 # --- OGÓLNE ---
